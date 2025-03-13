@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { groupCartItemsByRestaurant, parseMetadata } from "../utils";
 import { addStaffToQueue, getNextStaff, restaurantExists } from "../redis/staff";
+import { Console } from "console";
 
 dotenv.config();
 
@@ -18,48 +19,48 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function getHighestPrepTime(menuItemIds: number[]) {
-    // Early return if no ids provided
-    if (!menuItemIds.length) return 0;
-    
-    try {
-      const { data, error } = await supabase
-        .from('menu_items')
-        .select('preparation_time')
-        .in('id', menuItemIds);
-        
-      if (error) return 10;
-      
-      // Convert preparation times to minutes (numbers)
-      const prepTimes = data.map(item => {
-        // Extract the number from strings like "15 mins"
-        const minutes = parseInt(item.preparation_time.split(' ')[0]);
-        return isNaN(minutes) ? 10 : minutes;
-      });
-      
-      // Return the highest prep time
-      return Math.max(...prepTimes);
-      
-    } catch (error) {
-      console.error('Error fetching preparation times:', error);
-      return 10;
-    }
+  // Early return if no ids provided
+  if (!menuItemIds.length) return 0;
+
+  try {
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('preparation_time')
+      .in('id', menuItemIds);
+
+    if (error) return 10;
+
+    // Convert preparation times to minutes (numbers)
+    const prepTimes = data.map(item => {
+      // Extract the number from strings like "15 mins"
+      const minutes = parseInt(item.preparation_time.split(' ')[0]);
+      return isNaN(minutes) ? 10 : minutes;
+    });
+
+    // Return the highest prep time
+    return Math.max(...prepTimes);
+
+  } catch (error) {
+    console.error('Error fetching preparation times:', error);
+    return 10;
+  }
 }
 
 async function getRestaurantStaff(restaurantId: number) {
-        
+
   try {
-      const { data, error } = await supabase
-        .from('restaurant-staff')
-        .select('staff_id')
-        .eq('restaurant_id', restaurantId);
-        
-      if (error) return [];
-      
-      // Convert preparation times to minutes (numbers)
-      return data.map(({ staff_id }) => staff_id);
-      
+    const { data, error } = await supabase
+      .from('restaurant-staff')
+      .select('staff_id')
+      .eq('restaurant_id', restaurantId);
+
+    if (error) return [];
+
+    // Convert preparation times to minutes (numbers)
+    return data.map(({ staff_id }) => staff_id);
+
   } catch (error) {
-      return [];
+    return [];
   }
 }
 
@@ -80,99 +81,109 @@ async function isStaffOnline(staffId: string) {
 }
 
 export async function createOrder(data: Metadata) {
-    const userCart = parseMetadata(data);
-    const orders = groupCartItemsByRestaurant(userCart);
-    
+  const userCart = parseMetadata(data);
+  const orders = groupCartItemsByRestaurant(userCart);
 
-    await Promise.all(
-        orders.map(async (order) => {
-            const menuItemIds = order.order_items.map((item) => item.menu_item_id!);
-            const highestPrepTime = await getHighestPrepTime(menuItemIds);
 
-            const exists = await restaurantExists(order.restaurant_id);
+  await Promise.all(
+    orders.map(async (order) => {
+      console.log(order)
+      const menuItemIds = order.order_items.map((item) => item.menu_item_id!);
+      const highestPrepTime = await getHighestPrepTime(menuItemIds);
 
-            if (!exists) {
-              const staff = await getRestaurantStaff(order.restaurant_id)!;
-              await addStaffToQueue(order.restaurant_id, staff)
-            }
+      const exists = await restaurantExists(order.restaurant_id);
 
-            let nextStaff: string | null = await getNextStaff(order.restaurant_id);
-            let iterationCount = 0;
+      if (!exists) {
+        const staff = await getRestaurantStaff(order.restaurant_id)!;
+        await addStaffToQueue(order.restaurant_id, staff)
+      }
 
-            console.log(nextStaff)
-            
+      let nextStaff: string | null = await getNextStaff(order.restaurant_id);
+      let iterationCount = 0;
 
-            //while loop will repeatedly attempt to get an availale staff for 10 iterations 
-            while (true) {
-              const isOnline = await isStaffOnline(nextStaff!);
-              console.log(isOnline, "online")
+      console.log(nextStaff)
 
-              if (!isOnline) {
-                nextStaff = await getNextStaff(order.restaurant_id);
-                iterationCount += 1;
-                continue;
-              } else if (iterationCount >= 10) {
-                nextStaff = null;
-                break;
-              } else {
-                break;
-              }
-            }
 
-            const { data } = await supabase.from(SupabaseTables.Orders).upsert({
-              restaurant_id: order.restaurant_id,
-              total_amount: order.total_amount,
-              notes: "",
-              user_paid: false,
-              customer_name: order.customer_name,
-              user_id: order.user_id,
-              preparation_time: highestPrepTime,
-              assigned_staff: nextStaff,
-            }).select()
-            const orderData = data![0] as {
-              id: number,
-              total_amount: number,
-              restaurant_id: number,
-            }
-            
-            await supabase.from(SupabaseTables.OrderItems).insert(
-                order.order_items.map((item) => ({
-                  order_id: orderData.id,
-                  menu_item_id: item.menu_item_id,
-                  quantity: item.quantity,
-                  addon_name: item?.addon_name,
-                  addon_price: item?.addon_price,
-                }))
-            )
+      //while loop will repeatedly attempt to get an availale staff for 10 iterations 
+      while (true) {
+        const isOnline = await isStaffOnline(nextStaff!);
+        console.log(isOnline, "online")
 
-            
+        if (!isOnline) {
+          nextStaff = await getNextStaff(order.restaurant_id);
+          iterationCount += 1;
+          continue;
+        } else if (iterationCount >= 10) {
+          nextStaff = null;
+          break;
+        } else {
+          break;
+        }
+      }
+
+      const { data } = await supabase.from(SupabaseTables.Orders).upsert({
+        restaurant_id: order.restaurant_id,
+        total_amount: order.total_amount,
+        notes: "",
+        user_paid: false,
+        customer_name: order.customer_name,
+        user_id: order.user_id,
+        preparation_time: highestPrepTime,
+        assigned_staff: nextStaff,
+      }).select()
+      const orderData = data![0] as {
+        id: number,
+        total_amount: number,
+        restaurant_id: number,
+      }
+
+      await supabase.from(SupabaseTables.OrderItems).insert(
+        order.order_items.map((item) => () => {
+          console.log({
+            order_id: orderData.id,
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+            addon_name: item?.addon_name,
+            addon_price: item?.addon_price,
+          }, "order items")
+          return {
+            order_id: orderData.id,
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+            addon_name: item?.addon_name,
+            addon_price: item?.addon_price,
+          }
         })
-    )
+      )
 
-    const menuItemIds = orders.map((order) => {
-      return order.order_items.map((item) => item.menu_item_id)
-    }).flat()
 
-    const { data: menuItem } = await supabase.from(SupabaseTables.MenuItems)
-      .select('id, quantity')
-      .in('id', menuItemIds)
-      
-    const stockUpdatePromises = menuItem?.map(async (item) => {
-      await supabase.from(SupabaseTables.MenuItems)
+    })
+  )
+
+  const menuItemIds = orders.map((order) => {
+    return order.order_items.map((item) => item.menu_item_id)
+  }).flat()
+
+  const { data: menuItem } = await supabase.from(SupabaseTables.MenuItems)
+    .select('id, quantity')
+    .in('id', menuItemIds)
+
+  const stockUpdatePromises = menuItem?.map(async (item) => {
+    await supabase.from(SupabaseTables.MenuItems)
       .update({ quantity: item.quantity - 1 })
       .eq('id', item.id)
 
-      return true
-    })
+    return true
+  })
 
 
-    return await Promise.all([
-      await supabase.from(SupabaseTables.CartItems)
-        .delete()
-        .eq('user_id', data.user_id),
-      await Promise.all(stockUpdatePromises!)
-    ])
-    
+  return await Promise.all([
+    await supabase.from(SupabaseTables.CartItems)
+      .delete()
+      .eq('user_id', data.user_id),
+    await Promise.all(stockUpdatePromises!)
+  ])
+
 
 }
 
@@ -184,7 +195,7 @@ export async function getCustomerEmailFromDB(userId: string) {
 export async function getNotificationToken(userId: string) {
   const { data: token, error } = await supabase.from(SupabaseTables.NotificationTokens)
     .select("*").eq("user_id", userId).single();
-  
+
   if (error) throw new Error(error.message);
   return token as {
     fcm: string,
@@ -195,10 +206,10 @@ export async function getNotificationToken(userId: string) {
 
 export async function checkNotificationTokenExists(userId: string, newToken: string) {
   const { data: token, error } = await supabase.from(SupabaseTables.NotificationTokens)
-  .select("*").eq("user_id", userId).single();
+    .select("*").eq("user_id", userId).single();
 
   if (error) return { exists: false, changed: false };
-  
+
   if (token.expo !== newToken) return { exists: true, changed: true };
   return { exists: true, changed: false };
 
@@ -220,13 +231,13 @@ export async function createNotificationToken(userId: string, notificationToken:
 
 export async function updateNotificationToken(userId: string, notificationToken: string, platform: string) {
   const { error } = await supabase.from(SupabaseTables.NotificationTokens)
-  .update({
-    user_id: userId,
-    expo: notificationToken,
-    apn: platform === "ios" ? notificationToken : null,
-    fcm: platform !== "ios" ? notificationToken : null
-  })
-  .eq("user_id", userId)
+    .update({
+      user_id: userId,
+      expo: notificationToken,
+      apn: platform === "ios" ? notificationToken : null,
+      fcm: platform !== "ios" ? notificationToken : null
+    })
+    .eq("user_id", userId)
 
   if (error) throw new Error(error.message)
   return;
