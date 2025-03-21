@@ -1,7 +1,8 @@
 import { createClient } from 'redis';
 
 export const client = createClient({
-    url: `redis://default:${process.env.REDIS_PASSWORD}@${process.env.REDIS_PUBLIC_ENDPOINT}`
+    url: `redis://${process.env.REDIS_PUBLIC_ENDPOINT}`,
+    password: process.env.REDIS_PASSWORD
 });
 
 client.on('error', err => console.log('Redis Client Error', err));
