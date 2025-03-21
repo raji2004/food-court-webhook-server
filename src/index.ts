@@ -125,7 +125,7 @@ app.post('/device/register', async (req: Request, res: Response) => {
 app.post('/webhook', async (req: Request, res: Response) => {
   const webhookData = req.body;
   const event: "charge.success" = req.body.event;
-
+  console.log(process.env.REDIS_PUBLIC_ENDPOINT)
   try {
     switch(event) {
       case "charge.success":
