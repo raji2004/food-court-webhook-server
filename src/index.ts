@@ -139,7 +139,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
     console.log(e)
     return res.status(500).json({
-      error: e, message: "Internal Server Error"
+      error: e, message: `${process.env.REDIS_PUBLIC_ENDPOINT} An error occurred ${req.body}`
     })
   }
 });
