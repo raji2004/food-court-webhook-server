@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.client = void 0;
 const redis_1 = require("redis");
 exports.client = (0, redis_1.createClient)({
-    url: "redis://default:IB4Ar175FzoPjRfuWsrjwAWY3qJYd09u@redis-11870.c283.us-east-1-4.ec2.redns.redis-cloud.com:11870"
+    url: "redis://default:q5m7tGMwYvCwnPBVnOHxBrWl3sV7nPnI@redis-13819.c10.us-east-1-2.ec2.redns.redis-cloud.com:13819"
 });
 exports.client.on('error', err => console.log('Redis Client Error', err));
 function connect() {
