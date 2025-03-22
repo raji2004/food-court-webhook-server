@@ -1,11 +1,12 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import { createOrder, getCustomerEmailFromDB } from './supabase';
+import { createOrder, getAllRestaurantStaff, getCustomerEmailFromDB } from './supabase';
 import { getFeatureFlag } from './flags';
 import { sendEmailNotifcation } from './mail/send';
 import { SupabaseWebhookPayload, WebhookOrderInformation } from './types';
 import { getCustomerEmail, setCustomerEmail } from './redis/customer-email';
 import { registerDevice, sendNotification } from './notifications';
+import { addStaffToQueue } from './redis/staff';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -125,7 +126,7 @@ app.post('/device/register', async (req: Request, res: Response) => {
 app.post('/webhook', async (req: Request, res: Response) => {
   const webhookData = req.body;
   const event: "charge.success" = req.body.event;
-  console.log(process.env.REDIS_PUBLIC_ENDPOINT,req.body)
+
   try {
     switch(event) {
       case "charge.success":
@@ -135,14 +136,27 @@ app.post('/webhook', async (req: Request, res: Response) => {
         return res.status(200).json({ message: 'Webhook event not supported yet' })
     }
   } catch (e) {
-  console.log(process.env.REDIS_PUBLIC_ENDPOINT,req.body)
 
-    console.log(e)
     return res.status(500).json({
-      error: e, message: `${process.env.REDIS_PUBLIC_ENDPOINT} An error occurred ${req.body}`
+      error: e, message: `an error ${e} occured`
     })
   }
 });
+app.post('/populate', async (req: Request, res: Response) => {
+  try {
+    const staff = await getAllRestaurantStaff();
+
+    await Promise.all(
+      staff.map(({ restaurant_id, staff_id }) => addStaffToQueue(restaurant_id, [staff_id]))
+    );
+
+    res.status(200).json({ message: "Staff added to queue successfully" });
+  } catch (error) {
+    console.error("Error populating queue:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 // Start the server
 app.listen(port, () => {

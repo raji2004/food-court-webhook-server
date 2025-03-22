@@ -45,8 +45,26 @@ async function getHighestPrepTime(menuItemIds: number[]) {
     return 10;
   }
 }
+export async function getAllRestaurantStaff() {
+  try {
+    const { data, error } = await supabase
+      .from("restaurant-staff")
+      .select("staff_id, restaurant_id");
 
-async function getRestaurantStaff(restaurantId: number) {
+    if (error) {
+      console.error("Error fetching restaurant staff:", error);
+      return [];
+    }
+
+    return data; // Returns an array of { staff_id, restaurant_id }
+  } catch (error) {
+    console.error("Unexpected error:", error);
+    return [];
+  }
+}
+
+
+export async function getRestaurantStaff(restaurantId: number) {
 
   try {
     const { data, error } = await supabase
@@ -73,7 +91,7 @@ async function isStaffOnline(staffId: string) {
 
 
     if (error) return false;
-    return data.is_online;
+    return data.is_online as boolean;
 
   } catch {
     return false;
@@ -101,26 +119,28 @@ export async function createOrder(data: Metadata) {
       let nextStaff: string | null = await getNextStaff(order.restaurant_id);
       let iterationCount = 0;
 
-      console.log(nextStaff)
 
 
-      //while loop will repeatedly attempt to get an availale staff for 10 iterations 
+     
       while (true) {
-        const isOnline = await isStaffOnline(nextStaff!);
-        console.log(isOnline, "online")
-
-        if (!isOnline) {
-          nextStaff = await getNextStaff(order.restaurant_id);
-          iterationCount += 1;
-          continue;
-        } else if (iterationCount >= 10) {
-          nextStaff = null;
-          break;
-        } else {
-          break;
+        if (iterationCount >= 10) {
+            nextStaff = null;
+            break;
         }
-      }
-
+    
+        const isOnline = await isStaffOnline(nextStaff!);
+      
+    
+        if (isOnline === false) {
+            nextStaff = await getNextStaff(order.restaurant_id);
+            iterationCount += 1;
+         
+            continue;
+        } else {
+            break;
+        }
+    }
+     console.log('while loop done', nextStaff, order.restaurant_id)
       const { data } = await supabase.from(SupabaseTables.Orders).upsert({
         restaurant_id: order.restaurant_id,
         total_amount: order.total_amount,
@@ -136,16 +156,11 @@ export async function createOrder(data: Metadata) {
         total_amount: number,
         restaurant_id: number,
       }
+     
 
       await supabase.from(SupabaseTables.OrderItems).insert(
         order.order_items.map((item) => () => {
-          console.log({
-            order_id: orderData.id,
-            menu_item_id: item.menu_item_id,
-            quantity: item.quantity,
-            addon_name: item?.addon_name,
-            addon_price: item?.addon_price,
-          }, "order items")
+         
           return {
             order_id: orderData.id,
             menu_item_id: item.menu_item_id,
@@ -155,6 +170,7 @@ export async function createOrder(data: Metadata) {
           }
         })
       )
+     
 
 
     })
