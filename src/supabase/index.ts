@@ -105,7 +105,7 @@ export async function createOrder(data: Metadata) {
 
   await Promise.all(
     orders.map(async (order) => {
-      console.log(order)
+     
       const menuItemIds = order.order_items.map((item) => item.menu_item_id!);
       const highestPrepTime = await getHighestPrepTime(menuItemIds);
 
@@ -140,7 +140,7 @@ export async function createOrder(data: Metadata) {
             break;
         }
     }
-     console.log('while loop done', nextStaff, order.restaurant_id)
+     
       const { data } = await supabase.from(SupabaseTables.Orders).upsert({
         restaurant_id: order.restaurant_id,
         total_amount: order.total_amount,
