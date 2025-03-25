@@ -105,7 +105,7 @@ export async function createOrder(data: Metadata) {
 
   await Promise.all(
     orders.map(async (order) => {
-     
+
       const menuItemIds = order.order_items.map((item) => item.menu_item_id!);
       const highestPrepTime = await getHighestPrepTime(menuItemIds);
 
@@ -118,29 +118,23 @@ export async function createOrder(data: Metadata) {
 
       let nextStaff: string | null = await getNextStaff(order.restaurant_id);
       let iterationCount = 0;
+      const MAX_ITERATIONS = 10;
 
+      while (nextStaff && iterationCount < MAX_ITERATIONS) {
+        const isOnline = await isStaffOnline(nextStaff);
 
-
-     
-      while (true) {
-        if (iterationCount >= 10) {
-            nextStaff = null;
-            break;
+        if (!isOnline) {
+          nextStaff = await getNextStaff(order.restaurant_id);
+          iterationCount++;
+          continue;
         }
-    
-        const isOnline = await isStaffOnline(nextStaff!);
-      
-    
-        if (isOnline === false) {
-            nextStaff = await getNextStaff(order.restaurant_id);
-            iterationCount += 1;
-         
-            continue;
-        } else {
-            break;
-        }
-    }
-     
+        break;
+      }
+
+      if (!nextStaff) {
+        console.warn(`No online staff found for restaurant ${order.restaurant_id} after ${MAX_ITERATIONS} attempts`);
+      }
+
       const { data } = await supabase.from(SupabaseTables.Orders).upsert({
         restaurant_id: order.restaurant_id,
         total_amount: order.total_amount,
@@ -156,11 +150,11 @@ export async function createOrder(data: Metadata) {
         total_amount: number,
         restaurant_id: number,
       }
-     
+
 
       await supabase.from(SupabaseTables.OrderItems).insert(
         order.order_items.map((item) => () => {
-         
+
           return {
             order_id: orderData.id,
             menu_item_id: item.menu_item_id,
@@ -170,7 +164,7 @@ export async function createOrder(data: Metadata) {
           }
         })
       )
-     
+
 
 
     })

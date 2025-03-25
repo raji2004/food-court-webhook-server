@@ -57,7 +57,7 @@ app.post('/mail', async (req: Request, res: Response) => {
 app.get('/flag', async (_: Request, res: Response) => {
   try {
     const flagOn = await getFeatureFlag();
-  
+
     return res.status(200).json({
       message: 'Feature flag gotten',
       data: flagOn
@@ -128,7 +128,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
   const event: "charge.success" = req.body.event;
 
   try {
-    switch(event) {
+    switch (event) {
       case "charge.success":
         await createOrder(webhookData.data.metadata)
         return res.status(201).json({ message: 'Webhook received and processed successfully' });
